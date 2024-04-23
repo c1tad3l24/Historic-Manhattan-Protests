@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Historic Manhattan Protests</title>
+	<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+	<link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet">
+	<script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script> 
+	<style>
+		body { margin: 0; padding: 0; }
+		#map { position: absolute; top: 0; bottom: 0; width: 100%; }
+
+    .mapboxgl-popup {
+        max-width: 200px;
+        max-height: 200px;
+    }
+    .mapboxgl-popup-content {
+        overflow-y: scroll;
+        overflow-x: scroll;
+    }
+	</style>
+</head>
+<body>
+    <style>
+        .mapboxgl-popup {
+            max-width: 400px;
+            font:
+                12px/20px 'Helvetica Neue',
+                Arial,
+                Helvetica,
+                sans-serif;             
+        }
+        #fit {
+        display: block;
+        position: relative;
+        margin: 0px auto;
+        width: 50%;
+        height: 40px;
+        padding: 10px;
+        border: none;
+        border-radius: 3px;
+        font-size: 12px;
+        text-align: center;
+        color: #fff;
+        background: #495D63;
+    }
+    .website-info {
+        position: absolute;
+        font-family: sans-serif;
+        margin-top: 5px;
+        margin-left: 5px;
+        padding: 5px;
+        width: 30%;
+        border: 2px solid rgb(155, 155, 155);
+        font-size: 14px;
+        color: #222;
+        background-color: #fff;
+        border-radius: 3px;
+    }
+    </style>
+	<div id="map"></div>
+    <div class='website-info'>
+        <div><strong>Historic Manhattan Protests</strong>&nbsp;<p>Click on any of the 15 dashed lines to find out which riot or protest it represents.</p></div>
+    <br>
+    <button id="fit">See them all</button>
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoibnVtM3IxYyIsImEiOiJjbHM2ZHI1N3kxM2JnMnJvMzNlcmRkMm9uIn0.2PD6TiGDtJXLl4AKjh6yZA';
+    const map = new mapboxgl.Map({
+        container: 'map', // container ID
+        // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+        style: 'mapbox://styles/num3r1c/cluzpdmo200ye01p6huhp6w5m', // style URL
+        center: [-74.005, 40.713], // starting position [lng, lat]
+        zoom: 16.94 // starting zoom
+    });
+    document.getElementById('fit').addEventListener('click', () => {
+        map.fitBounds([
+            [-74.022, 40.697], // southwestern corner of the bounds
+            [-73.966, 40.775] // northeastern corner of the bounds
+        ]);
+    });
+
+	map.on('load', () => {
+        map.addSource('line', {
+            type: 'geojson',
+            //NEW here is the geojson file - I separated it out of this html so it is easier to manage.
+            data: 'riots.geojson' 
+        });
+
+        // add a line layer without line-dasharray defined to fill the gaps in the dashed line
+        map.addLayer({
+            id: 'line-background',
+            type: 'line',
+            source: 'line',
+            paint: {
+                'line-color': ['get', 'color'],
+                'line-blur': 2,
+                'line-width': 5,
+                'line-opacity': 0.4
+            }
+        });
+
+        // add a line layer with line-dasharray set to the first value in dashArraySequence
+        map.addLayer({
+            id: 'line-dashed',
+            type: 'line',
+            source: 'line',
+            paint: {
+                'line-color': ['get', 'color'],
+                'line-blur': 2,
+                'line-width': 5,
+                'line-dasharray': [0, 4, 3]
+            }
+        });
+
+        // technique based on https://jsfiddle.net/2mws8y3q/
+        // an array of valid line-dasharray values, specifying the lengths of the alternating dashes and gaps that form the dash pattern
+        const dashArraySequence = [
+            [0, 4, 3],
+            [0.5, 4, 2.5],
+            [1, 4, 2],
+            [1.5, 4, 1.5],
+            [2, 4, 1],
+            [2.5, 4, 0.5],
+            [3, 4, 0],
+            [0, 0.5, 3, 3.5],
+            [0, 1, 3, 3],
+            [0, 1.5, 3, 2.5],
+            [0, 2, 3, 2],
+            [0, 2.5, 3, 1.5],
+            [0, 3, 3, 1],
+            [0, 3.5, 3, 0.5]
+        ];
+        map.on('click', 'line-background', (e) => {
+            new mapboxgl.Popup()
+                .setLngLat(e.lngLat)
+                .setHTML(
+                `<div id = "pop-up container">
+                    <h3>${e.features[0].properties.name}</h3>
+                    <p>${e.features[0].properties.description}</p>
+                </div>`
+                )                
+                .addTo(map);
+        });
+        map.on('mouseenter', 'line-background', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });  
+        map.on('mouseleave', 'line-background', () => {
+            map.getCanvas().style.cursor = '';
+        });     
+        
+        //const features = map.queryRenderedFeatures(e.point, {layers: ['line-background']});
+        
+        //NEW here is where I am printing out the properties - it is whatever can be added to the json data
+        //console.log(features[0].properties)})
+
+        let step = 0;
+
+        function animateDashArray(timestamp) {
+            // Update line-dasharray using the next value in dashArraySequence. The
+            // divisor in the expression `timestamp / 50` controls the animation speed.
+            const newStep = parseInt(
+                (timestamp / 50) % dashArraySequence.length
+            );
+
+            if (newStep !== step) {
+                map.setPaintProperty(
+                    'line-dashed',
+                    'line-dasharray',
+                    dashArraySequence[step]
+                );
+                step = newStep;
+            }
+
+            // Request the next frame of the animation.
+            requestAnimationFrame(animateDashArray);
+        }
+
+        // start the animation
+        animateDashArray(0);
+    });
+
+
+</script>
+
+</body>
+</html>
